@@ -47,6 +47,10 @@ export type {
   CliResult,
   SchemaField,
   CommandMeta,
+  TrustLevel,
+  WrappedField,
+  SafeOutput,
+  WrapFieldOptions,
 } from "./types.js";
 
 // Parser utilities
@@ -69,6 +73,16 @@ export {
   runCli,
   cliTypes,
 } from "./validator.js";
+
+// Content safety utilities
+export {
+  wrapUntrustedField,
+  buildSafeOutput,
+  htmlToSafeText,
+  truncateContent,
+  detectSuspiciousContent,
+  TRUNCATION_DEFAULTS,
+} from "./content-safety.js";
 
 // Re-export Zod for convenience
 export { z } from "zod";

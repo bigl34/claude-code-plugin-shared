@@ -16,6 +16,7 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
+    "cheerio": "^1.2.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {

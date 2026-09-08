@@ -1,42 +1,4 @@
-/**
- * @local/cli-utils
- *
- * Shared CLI utilities with Zod validation for plugin CLIs.
- *
- * Features:
- * - Schema-based argument validation with Zod
- * - Automatic type coercion (string → number, boolean)
- * - Auto-generated help text from schema descriptions
- * - Consistent error message formatting
- * - Pre-built cache commands
- * - Global flags support (--no-cache, --help, --verbose)
- *
- * @example
- * ```typescript
- * import { z } from "zod";
- * import { createCommand, runCli, cacheCommands, cliTypes } from "@local/cli-utils";
- * import { MyClient } from "./my-client.js";
- *
- * const commands = {
- *   "get-order": createCommand(
- *     z.object({
- *       orderId: z.string().min(1).describe("Order ID"),
- *       limit: cliTypes.limit(50, 250),
- *     }),
- *     async (args, client) => client.getOrder(args.orderId),
- *     "Retrieve an order by ID"
- *   ),
- *   ...cacheCommands(),
- * };
- *
- * runCli(commands, MyClient, {
- *   programName: "my-cli",
- *   description: "My CLI tool",
- * });
- * ```
- */
 
-// Types
 export type {
   RawArgs,
   GlobalFlags,
@@ -51,9 +13,9 @@ export type {
   WrappedField,
   SafeOutput,
   WrapFieldOptions,
+  SideEffect,
 } from "./types.js";
 
-// Parser utilities
 export {
   parseArgs,
   extractCommand,
@@ -62,7 +24,6 @@ export {
   camelToKebab,
 } from "./parser.js";
 
-// Validator and CLI runner
 export {
   createCommand,
   cacheCommands,
@@ -74,7 +35,6 @@ export {
   cliTypes,
 } from "./validator.js";
 
-// Content safety utilities
 export {
   wrapUntrustedField,
   buildSafeOutput,
@@ -84,5 +44,31 @@ export {
   TRUNCATION_DEFAULTS,
 } from "./content-safety.js";
 
-// Re-export Zod for convenience
+export {
+  loadServiceConfig,
+  normalizeLegacyMcpConfig,
+  getServiceModuleDir,
+  loadPassCredentials,
+} from "./load-service-config.js";
+export type {
+  LoadServiceConfigOptions,
+  NormalizeLegacyMcpConfigOptions,
+  LoadPassCredentialsOptions,
+} from "./load-service-config.js";
+
+export {
+  ShopifyServiceConfigSchema,
+  SHOPIFY_CONFIG_SCHEMA_VERSION,
+  SHOPIFY_ACCESS_TOKEN_ENV_KEY,
+  SHOPIFY_STORE_DOMAIN_ENV_KEY,
+  parseShopifyServiceConfig,
+  resolveShopifyAdminCredentials,
+  resolveShopifyAccessToken,
+} from "./shopify-credentials.js";
+export type {
+  ShopifyServiceConfig,
+  ShopifyCredentialSource,
+  ShopifyAdminCredentials,
+} from "./shopify-credentials.js";
+
 export { z } from "zod";

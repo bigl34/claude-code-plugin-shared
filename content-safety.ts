@@ -1,15 +1,7 @@
-/**
- * @local/cli-utils Content Safety
- *
- * Defense-in-depth utilities for prompt injection defense.
- * Wraps untrusted external content with structural metadata
- * to help LLMs distinguish system output from user-generated content.
- */
 
 import * as cheerio from "cheerio";
 import type { WrappedField, SafeOutput, WrapFieldOptions } from "./types.js";
 
-// ==================== Truncation Defaults ====================
 
 export const TRUNCATION_DEFAULTS = {
   body: 8000,
@@ -18,7 +10,6 @@ export const TRUNCATION_DEFAULTS = {
   snippet: 500,
 } as const;
 
-// ==================== Suspicious Content Detection ====================
 
 const SUSPICIOUS_PATTERNS = [
   /ignore\s+(all\s+)?previous/i,
@@ -39,30 +30,19 @@ const SUSPICIOUS_PATTERNS = [
   /\bINSTRUCTION\s*:/i,
 ];
 
-/**
- * Lightweight pattern match for known prompt injection phrases.
- * Advisory only — sets `suspicious: true` on wrapped field.
- */
 export function detectSuspiciousContent(text: string): boolean {
   if (!text) return false;
   return SUSPICIOUS_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-// ==================== HTML to Safe Text ====================
 
-/**
- * DOM-based HTML→text conversion using cheerio.
- * Strips dangerous elements and hidden content.
- */
 export function htmlToSafeText(html: string): string {
   if (!html) return "";
 
   const $ = cheerio.load(html);
 
-  // Remove dangerous/invisible elements
   $("script, style, noscript, iframe, form, svg, object, embed, applet").remove();
 
-  // Remove elements with display:none or visibility:hidden
   $("[style]").each(function () {
     const style = $(this).attr("style") || "";
     if (
@@ -73,7 +53,6 @@ export function htmlToSafeText(html: string): string {
     }
   });
 
-  // Remove HTML comments
   $("*")
     .contents()
     .filter(function () {
@@ -81,7 +60,6 @@ export function htmlToSafeText(html: string): string {
     })
     .remove();
 
-  // Convert <a href> to text [URL] format
   $("a[href]").each(function () {
     const href = $(this).attr("href") || "";
     const text = $(this).text().trim();
@@ -92,20 +70,15 @@ export function htmlToSafeText(html: string): string {
     }
   });
 
-  // Convert <br> and block elements to newlines
   $("br").replaceWith("\n");
   $("p, div, h1, h2, h3, h4, h5, h6, li, tr, blockquote").each(function () {
     $(this).prepend("\n").append("\n");
   });
 
-  // Extract text and normalize whitespace
   let text = $.text();
 
-  // Strip zero-width characters used for token smuggling/obfuscation
-  // U+200B-U+200F, U+FEFF (BOM), U+2060 (word joiner), U+2028/2029 (line/para sep)
   text = text.replace(/[\u200B-\u200F\uFEFF\u2060\u2028\u2029]/g, "");
 
-  // Decode HTML entities (cheerio handles most, but clean up remnants)
   text = text
     .replace(/&nbsp;/g, " ")
     .replace(/&amp;/g, "&")
@@ -113,23 +86,17 @@ export function htmlToSafeText(html: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"');
 
-  // Normalize whitespace: collapse multiple spaces/tabs, trim lines
   text = text
     .split("\n")
     .map((line) => line.replace(/[ \t]+/g, " ").trim())
     .join("\n");
 
-  // Collapse 3+ consecutive newlines to 2
   text = text.replace(/\n{3,}/g, "\n\n");
 
   return text.trim();
 }
 
-// ==================== Truncation ====================
 
-/**
- * Word-boundary truncation with marker.
- */
 export function truncateContent(
   text: string,
   maxChars: number
@@ -140,7 +107,6 @@ export function truncateContent(
     return { text, truncated: false, originalLength };
   }
 
-  // Find the last space before maxChars to truncate at word boundary
   let truncateAt = maxChars;
   const lastSpace = text.lastIndexOf(" ", maxChars);
   if (lastSpace > maxChars * 0.8) {
@@ -155,13 +121,7 @@ export function truncateContent(
   };
 }
 
-// ==================== Field Wrapping ====================
 
-/**
- * Wraps a field value with untrusted metadata.
- * Applies HTML conversion and truncation per options.
- * Runs suspicious content detection.
- */
 export function wrapUntrustedField(
   field: string,
   value: unknown,
@@ -170,13 +130,11 @@ export function wrapUntrustedField(
   let text = value == null ? "" : String(value);
   let htmlConverted = false;
 
-  // Convert HTML to text if requested
   if (opts?.convertHtml && text.length > 0) {
     text = htmlToSafeText(text);
     htmlConverted = true;
   }
 
-  // Truncate if maxChars specified
   let truncated = false;
   let originalLength: number | undefined;
   if (opts?.maxChars && text.length > opts.maxChars) {
@@ -186,7 +144,6 @@ export function wrapUntrustedField(
     originalLength = result.originalLength;
   }
 
-  // Detect suspicious content
   const suspicious = detectSuspiciousContent(text);
 
   const wrapped: WrappedField = {
@@ -203,11 +160,7 @@ export function wrapUntrustedField(
   return wrapped;
 }
 
-// ==================== Safe Output Builder ====================
 
-/**
- * Collects untrusted field names from a content object (one level deep).
- */
 function collectUntrustedFields(
   content: Record<string, unknown>,
   prefix = ""
@@ -218,11 +171,9 @@ function collectUntrustedFields(
     const fieldPath = prefix ? `${prefix}.${key}` : key;
 
     if (Array.isArray(value)) {
-      // Check if array of WrappedFields
       if (value.length > 0 && isWrappedField(value[0])) {
         fields.push(`${fieldPath}[]`);
       }
-      // Check if array of objects that may contain wrapped fields
       for (const item of value) {
         if (item && typeof item === "object" && !isWrappedField(item)) {
           fields.push(...collectUntrustedFields(item as Record<string, unknown>, fieldPath));
@@ -247,10 +198,6 @@ function isWrappedField(value: unknown): value is WrappedField {
   );
 }
 
-/**
- * Creates the SafeOutput envelope with content safety metadata.
- * Auto-extracts untrustedFields list from content.
- */
 export function buildSafeOutput(
   metadata: Record<string, unknown>,
   content: Record<string, unknown>,
@@ -276,3 +223,4 @@ export function buildSafeOutput(
 
   return output;
 }
+

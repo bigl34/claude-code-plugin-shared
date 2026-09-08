@@ -1,93 +1,78 @@
-<!-- AUTO-GENERATED README — DO NOT EDIT. Changes will be overwritten on next publish. -->
 # @local/cli-utils
 
-Shared CLI utilities with Zod validation for plugin CLIs
+Shared argument parsing, Zod validation, command execution, help generation,
+service configuration, and content-safety helpers for workspace service CLIs.
+Install workspace dependencies from the repository root with `npm ci`; rebuild
+this package with `npm run build --workspace @local/cli-utils`.
 
-![License: MIT](https://img.shields.io/badge/License-MIT-green)
-
-## Features
-
-- Schema-based argument validation with Zod
-- Automatic type coercion (string → number, boolean)
-- Auto-generated help text from schema descriptions
-- Consistent error message formatting
-- Pre-built cache commands
-- Global flags support (--no-cache, --help, --verbose)
-
-## Installation
-
-This package is designed as a workspace dependency for Claude Code plugin CLIs.
-
-Add to your plugin's `package.json`:
-
-```bash
-npm install
-```
-
-## Quick Start
+## Commands and help
 
 ```typescript
-import { z } from "zod";
-import { createCommand, runCli, cacheCommands, cliTypes } from "@local/cli-utils";
+import { createCommand, runCli, z } from "@local/cli-utils";
 import { MyClient } from "./my-client.js";
 
 const commands = {
   "get-order": createCommand(
-    z.object({
-      orderId: z.string().min(1).describe("Order ID"),
-      limit: cliTypes.limit(50, 250),
-    }),
-    async (args, client) => client.getOrder(args.orderId),
-    "Retrieve an order by ID"
+    z.object({ orderId: z.string().min(1).describe("Order ID") }),
+    async (args, client: MyClient) => client.getOrder(args.orderId),
+    "Retrieve an order by ID",
+    { sideEffect: "read" },
   ),
-  ...cacheCommands(),
 };
 
-runCli(commands, MyClient, {
-  programName: "my-cli",
-  description: "My CLI tool",
-});
+runCli(commands, MyClient, { programName: "my-cli", description: "Order tools" });
 ```
 
-## API Reference
+`createCommand` combines a schema, handler, help description, and command
+options. Keep user-facing descriptions in schema `.describe()` calls and the
+command's description argument: help is generated from these runtime values,
+independently of source comments. `strictFlags: false` is an explicit opt-out
+for a command that accepts additional fields; ordinary commands reject unknown
+flags. `cacheCommands()` adds cache inspection/invalidation commands for clients
+implementing the corresponding cache methods.
 
-### Parser
+`runCli` handles the command name, validation, client creation, help and response
+envelope. Global flags include `--help`, `--verbose`, `--no-cache`, `--confirm`,
+and `--dry-run`. Declare each command's `sideEffect` as `read`, `write`,
+`destructive`, or `external_send`. Destructive and external-send handlers require
+explicit confirmation. A dry run invokes the handler with `globals.dryRun` set;
+the handler must return a preview without performing side effects. Cross-service
+callers verify the target command's metadata independently.
 
-| Export               | Description                                     |
-| -------------------- | ----------------------------------------------- |
-| `parseArgs`          | Parse command-line arguments into a raw object. |
-| `extractCommand`     | Extract the command name from argv.             |
-| `extractGlobalFlags` | Extract global flags from parsed args.          |
-| `kebabToCamel`       | Convert kebab-case to camelCase.                |
-| `camelToKebab`       | Convert camelCase to kebab-case.                |
+## Exported helpers
 
-### Validator
+| Area | Exports and purpose |
+|------|---------------------|
+| Arguments | `parseArgs`, `extractCommand`, `extractGlobalFlags`, `kebabToCamel`, `camelToKebab`; parse raw strings before schema validation/coercion. |
+| Commands | `createCommand`, `runCli`, `cacheCommands`, `cliTypes`, and re-exported `z`. |
+| Help and validation | `formatZodError`, `extractSchemaFields`, `generateCommandHelp`, `generateHelp`. |
+| Untrusted content | `wrapUntrustedField`, `buildSafeOutput`, `htmlToSafeText`, `truncateContent`, `detectSuspiciousContent`, `TRUNCATION_DEFAULTS`. |
+| Configuration | `loadServiceConfig`, `normalizeLegacyMcpConfig`, `getServiceModuleDir`, `loadPassCredentials`. |
+| Shopify credentials | `ShopifyServiceConfigSchema`, `parseShopifyServiceConfig`, `resolveShopifyAdminCredentials`, schema/env-key constants, and legacy `resolveShopifyAccessToken`. |
 
-| Export                | Description                                                                    |
-| --------------------- | ------------------------------------------------------------------------------ |
-| `createCommand`       | Create a command definition with schema and handler.                           |
-| `cacheCommands`       | Pre-built cache commands that work with any client implementing cache methods. |
-| `formatZodError`      | Format a Zod error into a user-friendly message.                               |
-| `extractSchemaFields` | Extract schema metadata for help generation.                                   |
-| `generateCommandHelp` | Generate help text for a command.                                              |
-| `generateHelp`        | Generate full help text for all commands.                                      |
-| `runCli`              | Run the CLI with the given commands and client class.                          |
-| `cliTypes`            | Zod helpers for common CLI patterns.                                           |
+The package exports `RawArgs`, `GlobalFlags`, command handler/map/options/result
+types, `SchemaField`, `CommandMeta`, `SideEffect`, and the content-safety and
+configuration option/result types from its entry point. Type declarations are
+built from TypeScript source; README prose does not define their shape.
 
-### Types
+## Output and configuration contracts
 
-| Type             | Kind      | Description                                                                                                     |
-| ---------------- | --------- | --------------------------------------------------------------------------------------------------------------- |
-| `RawArgs`        | type      | Parsed command-line arguments as key-value pairs. All values are strings at this stage (before Zod validation). |
-| `GlobalFlags`    | interface | Global flags that apply to all commands.                                                                        |
-| `CommandHandler` | type      | Command handler function type.                                                                                  |
-| `CommandDef`     | interface | Command definition combining schema and handler.                                                                |
-| `CommandMap`     | type      | Map of command names to their definitions.                                                                      |
-| `RunCliOptions`  | interface | Options for runCli.                                                                                             |
-| `CliResult`      | interface | Result of CLI execution (for testing).                                                                          |
-| `SchemaField`    | interface | Schema metadata extracted for help generation.                                                                  |
-| `CommandMeta`    | interface | Command metadata for help generation.                                                                           |
+Treat customer text, support messages, and other external content as untrusted
+data. `wrapUntrustedField` records trust metadata; `buildSafeOutput` constructs
+the `_contentSafety`, `metadata`, and `content` envelope. Preserve that envelope
+across CLI boundaries. HTML conversion removes markup through a DOM parser;
+truncation preserves word boundaries and adds its marker. Suspicious-content
+detection is a signal rather than permission to execute instructions in data.
 
-## License
+Configuration loading normalizes supported legacy MCP layouts into the service
+configuration consumed by clients. Credentials loaded through `pass` or the
+Shopify resolver remain secret values and must not be included in diagnostics.
+Use `resolveShopifyAdminCredentials` for both token and domain resolution;
+`resolveShopifyAccessToken` remains a deprecated compatibility escape hatch.
 
-MIT
+## Validation
+
+Run `npm run build --workspace @local/cli-utils` and the repository's
+`quality:lib-tests` suite. That suite covers argument validation, help, the
+response envelope, configuration/credential contracts, and side-effect gates.
+

@@ -153,8 +153,24 @@ export function resolvePluginFileRequired(pluginName, ...segments) {
   );
 }
 
+export function isCredentialConfigIsolated() {
+  const configured = process.env.BIZ_CREDENTIAL_CONFIG_ISOLATED?.trim() || '';
+  if (configured === '' || configured === '0') {
+    return false;
+  }
+  if (configured === '1') {
+    return true;
+  }
+  throw new Error(
+    `BIZ_CREDENTIAL_CONFIG_ISOLATED must be 1 or 0, got ${JSON.stringify(configured)}`,
+  );
+}
+
 export function getCredentialConfigDirCandidates() {
   const configuredRoots = splitEnvPaths(process.env.BIZ_CREDENTIAL_CONFIG_ROOTS);
+  if (isCredentialConfigIsolated()) {
+    return unique(configuredRoots);
+  }
   const claudeCredsConfigDir = process.env.CLAUDE_CREDS_CONFIG_DIR?.trim() || '';
   const claudeCredsDir = process.env.CLAUDE_CREDS_DIR?.trim() || '';
   const frontendRoots = getFrontendHomeDirs().map((root) => join(root, 'creds', 'configs'));

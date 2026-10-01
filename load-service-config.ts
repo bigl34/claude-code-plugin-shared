@@ -8,6 +8,7 @@ import { z, ZodError } from "zod";
 
 type AssistantPathsModule = {
   getBizRoot: () => string;
+  isCredentialConfigIsolated: () => boolean;
   resolveCredentialConfigPath: (fileName: string) => string | null;
 };
 
@@ -26,7 +27,8 @@ async function loadAssistantPaths(): Promise<AssistantPathsModule> {
   );
 }
 
-const { getBizRoot, resolveCredentialConfigPath } = await loadAssistantPaths();
+const { getBizRoot, isCredentialConfigIsolated, resolveCredentialConfigPath } =
+  await loadAssistantPaths();
 
 const DEFAULT_REMEDY =
   "Run cred-loader-sync to regenerate, or set BIZ_CREDENTIAL_CONFIG_ROOTS to override.";
@@ -61,7 +63,7 @@ export function loadServiceConfig<T>(
     }
   }
 
-  if (!resolvedPath) {
+  if (!resolvedPath && !isCredentialConfigIsolated()) {
     const legacyPath = join(getBizRoot(), "scripts", serviceName, "config.json");
     if (!tried.includes(legacyPath)) {
       tried.push(legacyPath);
@@ -76,8 +78,9 @@ export function loadServiceConfig<T>(
       return null;
     }
     const remedy = opts?.remedy ?? DEFAULT_REMEDY;
+    const triedText = tried.length > 0 ? tried.join(", ") : "no candidate paths";
     throw new Error(
-      `Missing config for ${serviceName}. Tried: ${tried.join(", ")}. ${remedy}`,
+      `Missing config for ${serviceName}. Tried: ${triedText}. ${remedy}`,
     );
   }
 
